@@ -1,0 +1,118 @@
+name: Bump formula
+
+on:
+  repository_dispatch:
+    types: [brew-updater-release]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Tag to publish, e.g. v1.0.0
+        required: true
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: bump-formula
+  cancel-in-progress: false
+
+jobs:
+  bump:
+    name: Bump Formula/brew-updater.rb
+    runs-on: macos-latest
+    timeout-minutes: 10
+    env:
+      TAG: ${{ github.event.client_payload.tag || inputs.tag }}
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Validate the tag input
+        run: |
+          set -euo pipefail
+          if [[ ! $TAG =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "invalid tag: $TAG (expected vX.Y.Z)" >&2
+            exit 1
+          fi
+
+      - name: Download the release archive and hash it
+        id: archive
+        run: |
+          set -euo pipefail
+          curl -fsSL -o "$RUNNER_TEMP/archive.tar.gz" \
+            "https://github.com/aroglahcim/brew-updater/archive/refs/tags/${TAG}.tar.gz"
+          sha=$(shasum -a 256 "$RUNNER_TEMP/archive.tar.gz" | cut -d' ' -f1)
+          {
+            echo "sha256=$sha"
+            echo "version=${TAG#v}"
+            echo "tag=$TAG"
+          } >> "$GITHUB_OUTPUT"
+
+      - name: Write or rewrite the formula
+        env:
+          SHA256: ${{ steps.archive.outputs.sha256 }}
+        run: |
+          set -euo pipefail
+          mkdir -p Formula
+          formula=Formula/brew-updater.rb
+
+          if [[ -f $formula ]]; then
+            perl -0pi -e "s|archive/refs/tags/v[^/]+\\.tar\\.gz|archive/refs/tags/${TAG}.tar.gz|" "$formula"
+            perl -0pi -e "s|sha256 \"[a-f0-9]{64}\"|sha256 \"${SHA256}\"|" "$formula"
+          else
+            cat > "$formula" <<RUBY
+          class BrewUpdater < Formula
+            desc "Daily Homebrew update check with a clickable macOS notification"
+            homepage "https://github.com/aroglahcim/brew-updater"
+            url "https://github.com/aroglahcim/brew-updater/archive/refs/tags/${TAG}.tar.gz"
+            sha256 "${SHA256}"
+            license "Apache-2.0"
+
+            livecheck do
+              url :stable
+              strategy :github_latest
+            end
+
+            depends_on "terminal-notifier"
+            depends_on :macos
+
+            def install
+              bin.install "bin/brew-update-check", "bin/brew-update-run"
+              pkgshare.install "launchd", "install.sh", "uninstall.sh"
+            end
+
+            def post_install
+              system pkgshare/"install.sh", "--bin-dir", bin, "--from-prefix"
+            end
+
+            def caveats
+              <<~EOS
+                The LaunchAgent was installed for the current user.
+                Check notification permissions for terminal-notifier and run:
+                  terminal-notifier -diagnose
+              EOS
+            end
+
+            test do
+              assert_match "usage:", shell_output("#{bin}/brew-update-check --help")
+            end
+          end
+          RUBY
+          fi
+
+          ruby -c "$formula"
+
+      - name: Open a pull request
+        uses: peter-evans/create-pull-request@v7
+        with:
+          commit-message: "brew-updater ${{ steps.archive.outputs.version }}"
+          branch: "brew-updater-${{ steps.archive.outputs.version }}"
+          title: "brew-updater ${{ steps.archive.outputs.version }}"
+          body: |
+            Automated formula bump to brew-updater ${{ steps.archive.outputs.version }}.
+
+            Archive: https://github.com/aroglahcim/brew-updater/archive/refs/tags/${{ steps.archive.outputs.tag }}.tar.gz
+            sha256: `${{ steps.archive.outputs.sha256 }}`
+
+            Merging this makes `brew install aroglahcim/tap/brew-updater` resolve to this release.
+          delete-branch: true
