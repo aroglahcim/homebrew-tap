@@ -48,7 +48,7 @@ jobs:
             echo "tag=$TAG"
           } >> "$GITHUB_OUTPUT"
 
-      - name: Write or rewrite the formula
+      - name: Write the formula
         env:
           SHA256: ${{ steps.archive.outputs.sha256 }}
         run: |
@@ -56,11 +56,7 @@ jobs:
           mkdir -p Formula
           formula=Formula/brew-updater.rb
 
-          if [[ -f $formula ]]; then
-            perl -0pi -e "s|archive/refs/tags/v[^/]+\\.tar\\.gz|archive/refs/tags/${TAG}.tar.gz|" "$formula"
-            perl -0pi -e "s|sha256 \"[a-f0-9]{64}\"|sha256 \"${SHA256}\"|" "$formula"
-          else
-            cat > "$formula" <<RUBY
+          cat > "$formula" <<RUBY
           class BrewUpdater < Formula
             desc "Daily Homebrew update check with a clickable macOS notification"
             homepage "https://github.com/aroglahcim/brew-updater"
@@ -111,7 +107,6 @@ jobs:
             end
           end
           RUBY
-          fi
 
           ruby -c "$formula"
 
