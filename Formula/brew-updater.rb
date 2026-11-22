@@ -1,8 +1,8 @@
 class BrewUpdater < Formula
   desc "Daily Homebrew update check with a clickable macOS notification"
   homepage "https://github.com/aroglahcim/brew-updater"
-  url "https://github.com/aroglahcim/brew-updater/archive/refs/tags/v1.1.0.tar.gz"
-  sha256 "69ea683638438313e10a57a3e3ab57da07139cb721494a42a7e9a5e877d18d25"
+  url "https://github.com/aroglahcim/brew-updater/archive/refs/tags/v1.1.1.tar.gz"
+  sha256 "68c2fd33ac7dc0b4ecae25529d8e6bc54b8a1dd560d1ffc504fc70ecca181042"
   license "Apache-2.0"
 
   livecheck do
