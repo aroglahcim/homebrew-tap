@@ -24,7 +24,7 @@ class BrewUpdater < Formula
   # outside the sandbox (a source install) still configures the agent, and a
   # sandboxed pour only prints the steps that remain.
   post_install_steps do
-    run "{{opt_prefix}}/pkgshare/install.sh",
+    run "{{pkgshare}}/install.sh",
         args:         ["--bin-dir", "{{opt_prefix}}/bin"],
         must_succeed: false
   end
